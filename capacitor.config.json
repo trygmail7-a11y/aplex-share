@@ -1,0 +1,12 @@
+{
+  "appId": "in.aplex.share",
+  "appName": "Aplex Share",
+  "webDir": ".",
+  "android": {
+    "minWebViewVersion": 55
+  },
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  }
+}
