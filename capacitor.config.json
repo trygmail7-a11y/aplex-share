@@ -1,7 +1,7 @@
 {
   "appId": "in.aplex.share",
   "appName": "Aplex Share",
-  "webDir": ".",
+  "webDir": "www",
   "android": {
     "minWebViewVersion": 55
   },
