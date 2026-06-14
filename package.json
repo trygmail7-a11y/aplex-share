@@ -1,0 +1,12 @@
+{
+  "name": "aplex-share",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "echo build"
+  },
+  "dependencies": {
+    "@capacitor/core": "6.1.2",
+    "@capacitor/android": "6.1.2",
+    "@capacitor/cli": "6.1.2"
+  }
+}
