@@ -26,6 +26,12 @@ jobs:
       - name: Install Dependencies
         run: npm install
 
+      - name: Prepare Web Dir
+        run: |
+          mkdir -p www
+          cp index.html www/
+          cp favicon.png www/
+
       - name: Add Android Platform
         run: npx cap add android
 
