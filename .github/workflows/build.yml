@@ -1,17 +1,25 @@
-name: Build APK from ZIP
+name: Build Release AAB and APK
 
 on:
-  push:
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
-  build:
+  release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Check signing secrets
+        env:
+          S1: ${{ secrets.KEYSTORE_BASE64 }}
+          S2: ${{ secrets.KEYSTORE_PASSWORD }}
+          S3: ${{ secrets.KEY_ALIAS }}
+          S4: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          [ -n "$S1" ] || { echo "Secret KEYSTORE_BASE64 is missing"; exit 1; }
+          [ -n "$S2" ] || { echo "Secret KEYSTORE_PASSWORD is missing"; exit 1; }
+          [ -n "$S3" ] || { echo "Secret KEY_ALIAS is missing"; exit 1; }
+          [ -n "$S4" ] || { echo "Secret KEY_PASSWORD is missing"; exit 1; }
 
       - name: Find project (unzips AplexShare.zip if it is in the repo)
         id: loc
@@ -19,7 +27,6 @@ jobs:
           set -e
           ZIP=$(find . -maxdepth 2 -iname '*.zip' -not -path './.git/*' | head -n 1)
           if [ -n "$ZIP" ]; then
-            echo "Found zip: $ZIP"
             mkdir -p "$RUNNER_TEMP/proj"
             unzip -q "$ZIP" -d "$RUNNER_TEMP/proj"
             ROOT=$(dirname "$(find "$RUNNER_TEMP/proj" -name settings.gradle.kts | head -n 1)")
@@ -41,21 +48,26 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Build debug APK
-        working-directory: ${{ steps.loc.outputs.root }}
-        run: gradle :app:assembleDebug --no-daemon --stacktrace
+      - name: Decode keystore
+        env:
+          KS: ${{ secrets.KEYSTORE_BASE64 }}
+        run: echo "$KS" | base64 -d > "$RUNNER_TEMP/release.jks"
 
-      - name: Upload APK as artifact
+      - name: Build signed release (AAB + APK)
+        working-directory: ${{ steps.loc.outputs.root }}
+        env:
+          KEYSTORE_PATH: ${{ runner.temp }}/release.jks
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: gradle :app:assembleRelease :app:bundleRelease --no-daemon --stacktrace
+
+      - name: Upload release files
         uses: actions/upload-artifact@v4
         with:
-          name: AplexShare-debug-apk
-          path: ${{ steps.loc.outputs.root }}/app/build/outputs/apk/debug/*.apk
-
-      - name: Publish APK to Releases (easy download)
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          cp "${{ steps.loc.outputs.root }}"/app/build/outputs/apk/debug/*.apk AplexShare.apk
-          gh release create "build-${{ github.run_number }}" AplexShare.apk \
-            --title "Aplex Share build ${{ github.run_number }}" \
-            --notes "Debug APK built automatically."
+          name: AplexShare-release
+          if-no-files-found: error
+          path: |
+            ${{ steps.loc.outputs.root }}/app/build/outputs/bundle/release/*.aab
+            ${{ steps.loc.outputs.root }}/app/build/outputs/apk/release/*.apk
+            ${{ steps.loc.outputs.root }}/app/build/outputs/mapping/release/mapping.txt
