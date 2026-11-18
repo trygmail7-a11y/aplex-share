@@ -27,6 +27,8 @@ jobs:
             exit 1
           fi
           echo "root=$ROOT" >> "$GITHUB_OUTPUT"
+          if [ -f "$ROOT/gradle-version.txt" ]; then GV=$(tr -d ' \r\n' < "$ROOT/gradle-version.txt"); else GV=8.13; fi
+          echo "gv=$GV" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-java@v4
         with:
@@ -35,7 +37,7 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.9'
+          gradle-version: ${{ steps.loc.outputs.gv }}
 
       - name: Prepare signing (cleans secrets, alias is fixed to "upload")
         env:
