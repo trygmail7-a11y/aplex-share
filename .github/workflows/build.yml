@@ -10,18 +10,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check signing secrets
-        env:
-          S1: ${{ secrets.KEYSTORE_BASE64 }}
-          S2: ${{ secrets.KEYSTORE_PASSWORD }}
-          S3: ${{ secrets.KEY_ALIAS }}
-          S4: ${{ secrets.KEY_PASSWORD }}
-        run: |
-          [ -n "$S1" ] || { echo "Secret KEYSTORE_BASE64 is missing"; exit 1; }
-          [ -n "$S2" ] || { echo "Secret KEYSTORE_PASSWORD is missing"; exit 1; }
-          [ -n "$S3" ] || { echo "Secret KEY_ALIAS is missing"; exit 1; }
-          [ -n "$S4" ] || { echo "Secret KEY_PASSWORD is missing"; exit 1; }
-
       - name: Find project (unzips AplexShare.zip if it is in the repo)
         id: loc
         run: |
@@ -49,18 +37,29 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Decode keystore
+      - name: Prepare signing (cleans secrets, alias is fixed to "upload")
         env:
           KS: ${{ secrets.KEYSTORE_BASE64 }}
-        run: echo "$KS" | base64 -d > "$RUNNER_TEMP/release.jks"
+          P1: ${{ secrets.KEYSTORE_PASSWORD }}
+          P2: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          [ -n "$KS" ] || { echo "Secret KEYSTORE_BASE64 is missing"; exit 1; }
+          [ -n "$P1" ] || { echo "Secret KEYSTORE_PASSWORD is missing"; exit 1; }
+          [ -n "$P2" ] || { echo "Secret KEY_PASSWORD is missing"; exit 1; }
+          printf '%s' "$KS" | tr -d ' \r\n' | base64 -d > "$RUNNER_TEMP/release.jks"
+          PW1=$(printf '%s' "$P1" | tr -d ' \r\n')
+          PW2=$(printf '%s' "$P2" | tr -d ' \r\n')
+          if ! keytool -list -keystore "$RUNNER_TEMP/release.jks" -storepass "$PW1" 2>/dev/null | grep -q "^upload,"; then
+            echo "Keystore did not open with alias 'upload'. Check KEYSTORE_BASE64 (one single line) and KEYSTORE_PASSWORD."
+            exit 1
+          fi
+          echo "KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          echo "KEYSTORE_PASSWORD=$PW1" >> "$GITHUB_ENV"
+          echo "KEY_PASSWORD=$PW2" >> "$GITHUB_ENV"
+          echo "KEY_ALIAS=upload" >> "$GITHUB_ENV"
 
       - name: Build signed release (AAB + APK)
         working-directory: ${{ steps.loc.outputs.root }}
-        env:
-          KEYSTORE_PATH: ${{ runner.temp }}/release.jks
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: gradle :app:assembleRelease :app:bundleRelease --no-daemon --stacktrace
 
       - name: Upload release files
